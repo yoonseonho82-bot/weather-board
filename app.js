@@ -26,10 +26,6 @@ async function loadTasks() {
   refreshTasks();
 }
 
-function weatherText(w) {
-  return w ? w.tempMax + '℃ · ' + w.windMax + 'm/s · ' + w.rainProb + '%' : '-';
-}
-
 function renderTasks() {
   const body = document.getElementById('taskList');
   body.innerHTML = '';
@@ -85,15 +81,42 @@ async function loadWeather() {
   renderTasks();
 }
 
-// 오늘 날짜를 YYYY-MM-DD 로 표시 (PC 시간 기준)
-function renderToday() {
+// 오늘 날짜 YYYY-MM-DD (PC 시간 기준)
+function todayText() {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
-  document.getElementById('todayBox').textContent = d.getFullYear() + '-' + mm + '-' + dd;
+  return d.getFullYear() + '-' + mm + '-' + dd;
+}
+
+function renderToday() {
+  document.getElementById('todayBox').textContent = todayText();
+}
+
+// 지금 표를 마크다운 파일로 내려받음
+function saveMd() {
+  const msg = document.getElementById('msgBox');
+  if (tasks.length === 0) {
+    msg.textContent = '저장할 일정이 없습니다';
+    return;
+  }
+  const date = todayText();
+  const test = new URLSearchParams(location.search).get('test');
+  const note = test === 'wind' ? '(시험: 풍속 12 m/s)' : '';
+  const md = buildJudgementMd(date, tasks, weatherByRegion, note);
+  const url = URL.createObjectURL(new Blob([md], { type: 'text/markdown;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '현장일정_판단_' + date + '.md';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  msg.textContent = '';
 }
 
 document.getElementById('taskForm').addEventListener('submit', addTask);
+document.getElementById('saveMdBtn').addEventListener('click', saveMd);
 renderToday();
 loadTasks();
 loadWeather();
