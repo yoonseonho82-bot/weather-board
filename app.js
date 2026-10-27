@@ -1,21 +1,29 @@
 // app.js – 화면 동작 (목록 그리기, 일정 추가)
 
-// 01 단원 : 일정 목록을 코드 안에 둠 (가상 데이터) → 04 단원에서 data/tasks.json 으로 분리
-const SAMPLE_TASKS = [
-  { title: '다중이용시설 안전점검', region: '세종', kind: '야외', owner: '김안전' },
-  { title: '시민 안전체험 행사 운영', region: '보령', kind: '야외', owner: '이행사' },
-  { title: '옥상 태양광 설비 점검', region: '태안', kind: '고소', owner: '박설비' },
-  { title: '하천 수위계 확인', region: '대전', kind: '야외', owner: '최현장' },
-  { title: '청사 외벽 간판 보수', region: '세종', kind: '고소', owner: '정시설' },
-  { title: '비상연락 훈련', region: '대전', kind: '실내', owner: '한상황' },
-];
-
+let baseTasks = null;       // data/tasks.json 에서 읽은 일정 (못 읽으면 null)
 let tasks = [];
 let weatherByRegion = {};   // 03 단원에서 지역별 날씨를 넣음
 
-function loadTasks() {
+// JSON 을 먼저 읽고, 그다음 화면에서 추가한 일정(wx_added)을 이어 붙임
+function refreshTasks() {
   const saved = JSON.parse(localStorage.getItem('wx_added') || '[]');
-  tasks = SAMPLE_TASKS.concat(saved);
+  tasks = baseTasks ? baseTasks.concat(saved) : [];
+  renderTasks();
+}
+
+async function loadTasks() {
+  const msg = document.getElementById('msgBox');
+  try {
+    const res = await fetch('data/tasks.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    baseTasks = await res.json();
+    msg.textContent = '';
+  } catch (err) {
+    // 더블클릭(file://)으로 열면 브라우저가 JSON 읽기를 막음
+    baseTasks = null;
+    msg.textContent = '배포 주소로 열어 주세요';
+  }
+  refreshTasks();
 }
 
 function weatherText(w) {
@@ -55,8 +63,7 @@ function addTask(e) {
   saved.push(t);
   localStorage.setItem('wx_added', JSON.stringify(saved));
   e.target.reset();
-  loadTasks();
-  renderTasks();
+  refreshTasks();
 }
 
 // 지역별 날씨를 받아 표를 다시 그림 (실패해도 목록은 그대로 보임)
@@ -89,5 +96,4 @@ function renderToday() {
 document.getElementById('taskForm').addEventListener('submit', addTask);
 renderToday();
 loadTasks();
-renderTasks();
 loadWeather();
