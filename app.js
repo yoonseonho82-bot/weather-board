@@ -59,6 +59,25 @@ function addTask(e) {
   renderTasks();
 }
 
+// 지역별 날씨를 받아 표를 다시 그림 (실패해도 목록은 그대로 보임)
+async function loadWeather() {
+  const box = document.getElementById('weatherBox');
+  try {
+    const res = await fetch(buildWeatherUrl());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const test = new URLSearchParams(location.search).get('test');
+    weatherByRegion = applyTestMode(parseWeather(await res.json()), test);
+    const names = Object.keys(weatherByRegion);
+    if (names.length === 0) throw new Error('empty');
+    box.textContent = names.map(n => n + ' ' + weatherText(weatherByRegion[n])).join('  |  ')
+      + (test === 'wind' ? '  (시험: 풍속 12 m/s)' : '');
+  } catch (err) {
+    weatherByRegion = {};
+    box.textContent = '날씨를 받지 못했습니다. 일정 목록만 표시합니다.';
+  }
+  renderTasks();
+}
+
 // 오늘 날짜를 YYYY-MM-DD 로 표시 (PC 시간 기준)
 function renderToday() {
   const d = new Date();
@@ -71,3 +90,4 @@ document.getElementById('taskForm').addEventListener('submit', addTask);
 renderToday();
 loadTasks();
 renderTasks();
+loadWeather();
