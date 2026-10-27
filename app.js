@@ -1,29 +1,41 @@
 // app.js – 화면 동작 (목록 그리기, 일정 추가)
 
-let baseTasks = null;       // data/tasks.json 에서 읽은 일정 (못 읽으면 null)
 let tasks = [];
 let weatherByRegion = {};   // 03 단원에서 지역별 날씨를 넣음
+let db = null;              // Supabase 연결 (config.js 를 채우지 않았으면 null)
+let dbOk = false;           // 이번에 DB 에서 일정을 읽었는지
 
-// JSON 을 먼저 읽고, 그다음 화면에서 추가한 일정(wx_added)을 이어 붙임
-function refreshTasks() {
-  const saved = JSON.parse(localStorage.getItem('wx_added') || '[]');
-  tasks = baseTasks ? baseTasks.concat(saved) : [];
-  renderTasks();
+// config.js 의 주소 · 공개용 키로 연결을 만듦 (자리표시 그대로면 연결 안 함)
+function makeClient() {
+  if (typeof supabase === 'undefined') return null;
+  if (!/^https:\/\//.test(SUPABASE_URL) || !SUPABASE_KEY || SUPABASE_KEY.startsWith('여기에')) return null;
+  return supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
+// DB(wx_tasks)에서 먼저 읽고, 안 되면 data/tasks.json 을 읽기 전용으로 보여 줌
 async function loadTasks() {
   const msg = document.getElementById('msgBox');
   try {
-    const res = await fetch('data/tasks.json');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    baseTasks = await res.json();
+    if (!db) throw new Error('DB 설정 없음');
+    const { data, error } = await db.from('wx_tasks').select('title,region,kind,owner').order('id');
+    if (error) throw error;
+    tasks = data;
+    dbOk = true;
     msg.textContent = '';
   } catch (err) {
-    // 더블클릭(file://)으로 열면 브라우저가 JSON 읽기를 막음
-    baseTasks = null;
-    msg.textContent = '배포 주소로 열어 주세요';
+    dbOk = false;
+    try {
+      const res = await fetch('data/tasks.json');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      tasks = await res.json();
+      msg.textContent = 'DB에 연결하지 못해 data/tasks.json 을 보여 줍니다 (일정 추가 불가)';
+    } catch (err2) {
+      // 더블클릭(file://)으로 열면 브라우저가 JSON 읽기를 막음
+      tasks = [];
+      msg.textContent = '배포 주소로 열어 주세요 (DB 연결도 확인)';
+    }
   }
-  refreshTasks();
+  renderTasks();
 }
 
 function renderTasks() {
@@ -46,8 +58,10 @@ function renderTasks() {
   }
 }
 
-function addTask(e) {
+async function addTask(e) {
   e.preventDefault();
+  const form = e.target;
+  const msg = document.getElementById('msgBox');
   const t = {
     title: document.getElementById('titleInput').value.trim(),
     region: document.getElementById('regionInput').value,
@@ -55,11 +69,17 @@ function addTask(e) {
     owner: document.getElementById('ownerInput').value.trim(),
   };
   if (!t.title || !t.owner) return;
-  const saved = JSON.parse(localStorage.getItem('wx_added') || '[]');
-  saved.push(t);
-  localStorage.setItem('wx_added', JSON.stringify(saved));
-  e.target.reset();
-  refreshTasks();
+  if (!dbOk) {
+    msg.textContent = '일정 추가는 DB에 연결되어야 합니다';
+    return;
+  }
+  const { error } = await db.from('wx_tasks').insert(t);
+  if (error) {
+    msg.textContent = '일정을 추가하지 못했습니다: ' + error.message;
+    return;
+  }
+  form.reset();
+  await loadTasks();
 }
 
 // 지역별 날씨를 받아 표를 다시 그림 (실패해도 목록은 그대로 보임)
@@ -118,5 +138,6 @@ function saveMd() {
 document.getElementById('taskForm').addEventListener('submit', addTask);
 document.getElementById('saveMdBtn').addEventListener('click', saveMd);
 renderToday();
+db = makeClient();
 loadTasks();
 loadWeather();
